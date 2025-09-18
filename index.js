@@ -1,8 +1,28 @@
+const fs = require('fs');
+const { spawn } = require('child_process');
+
+if (!fs.existsSync('./chroma_store')) {
+  console.log('chroma_store not found. Running embed_store.py...');
+  const embed = spawn('python', ['embed_store.py'], {
+    cwd: __dirname,
+    env: { ...process.env }
+  });
+
+  embed.stdout.on('data', (data) => console.log(`Embed stdout: ${data}`));
+  embed.stderr.on('data', (data) => console.error(`Embed stderr: ${data}`));
+
+  embed.on('close', (code) => {
+    if (code === 0) {
+      console.log('Embed store built successfully.');
+    } else {
+      console.error(`Embed store failed with exit code ${code}`);
+    }
+  });
+}
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const redis = require('redis');
-const { spawn } = require('child_process');
 const axios = require('axios');
 require('dotenv').config();
 
@@ -10,7 +30,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({
-  origin: ['https://news-chatbot-frontend-e592.onrender.com/', 'http://localhost:3000'],
+  origin: ['https://news-chatbot-frontend-e592.onrender.com', 'http://localhost:3000'],
   credentials: true
 }));
 

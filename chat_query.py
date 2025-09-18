@@ -6,7 +6,7 @@ import requests
 import time
 import traceback
 
-CHROMA_DIR = os.getenv("CHROMA_DIR", "../chroma_store")
+CHROMA_DIR = os.getenv("CHROMA_DIR", "chroma_store")
 COLLECTION_NAME = "news_articles"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MAX_RETRIES = 3
