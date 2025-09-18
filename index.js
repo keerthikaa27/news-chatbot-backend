@@ -1,11 +1,22 @@
 const fs = require('fs');
 const { spawn } = require('child_process');
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const redis = require('redis');
+const axios = require('axios');
+require('dotenv').config();
 
-if (!fs.existsSync('./chroma_store')) {
-  console.log('chroma_store not found. Running embed_store.py...');
+const app = express();
+const PORT = process.env.PORT || 5000;
+const CHROMA_DIR = process.env.CHROMA_DIR || './chroma_store';
+
+
+if (!fs.existsSync(CHROMA_DIR)) {
+  console.log(`${CHROMA_DIR} not found. Running embed_store.py...`);
   const embed = spawn('python', ['embed_store.py'], {
     cwd: __dirname,
-    env: { ...process.env }
+    env: { ...process.env, CHROMA_DIR, CSV_FILE: process.env.CSV_FILE, COLLECTION_NAME: process.env.COLLECTION_NAME, BATCH_SIZE: process.env.BATCH_SIZE, START_ROW: process.env.START_ROW }
   });
 
   embed.stdout.on('data', (data) => console.log(`Embed stdout: ${data}`));
@@ -19,48 +30,45 @@ if (!fs.existsSync('./chroma_store')) {
     }
   });
 }
-const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
-const redis = require('redis');
-const axios = require('axios');
-require('dotenv').config();
-
-const app = express();
-const PORT = process.env.PORT || 5000;
 
 app.use(cors({
   origin: ['https://news-chatbot-frontend-e592.onrender.com', 'http://localhost:3000'],
   credentials: true
 }));
-
 app.use(bodyParser.json());
 
 // Redis client
 const redisClient = redis.createClient({
-  url: process.env.REDIS_URL 
+  url: process.env.REDIS_URL
 });
 redisClient.on('error', (err) => console.error('Redis Client Error', err));
 
-// Cache warming function
 const warmCache = async () => {
   const queries = ["latest news on india", "india economy"];
   const warmupSessionId = "warmup-" + Date.now();
   console.log('Starting cache warming...');
-  
+
   for (const query of queries) {
-    try {
-      await axios.post('https://news-chatbot-backend-ko8e.onrender.com/chat', {
-        message: query,
-        sessionId: warmupSessionId
-      }, { timeout: 30000 });
-      console.log(`Cache warmed for query: "${query}"`);
-    } catch (err) {
-      console.error(`Cache warm failed for "${query}":`, err.message);
+    let attempts = 3;
+    while (attempts > 0) {
+      try {
+        await axios.post('https://news-chatbot-backend-ko8e.onrender.com/chat', {
+          message: query,
+          sessionId: warmupSessionId
+        }, { timeout: 30000 });
+        console.log(`Cache warmed for query: "${query}"`);
+        break;
+      } catch (err) {
+        console.error(`Cache warm failed for "${query}" (attempt ${4 - attempts}):`, err.message);
+        attempts--;
+        if (attempts === 0) {
+          console.error(`Failed to warm cache for "${query}" after 3 attempts`);
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+      }
     }
   }
-  
-  // Clean up warmup session
+
   try {
     await redisClient.del(`session:${warmupSessionId}`);
     console.log('Warmup session cleared');
@@ -73,7 +81,6 @@ const warmCache = async () => {
   try {
     await redisClient.connect();
     console.log('Connected to Redis');
-    // Warm cache after Redis connects
     await warmCache();
   } catch (err) {
     console.error('Redis connect error:', err);
@@ -91,7 +98,7 @@ app.post('/chat', async (req, res) => {
   try {
     const python = spawn('python', ['chat_query.py', message.trim()], {
       cwd: __dirname,
-      env: { ...process.env, GEMINI_API_KEY: process.env.GEMINI_API_KEY, CHROMA_DIR: process.env.CHROMA_DIR }
+      env: { ...process.env, GEMINI_API_KEY: process.env.GEMINI_API_KEY, CHROMA_DIR, COLLECTION_NAME: process.env.COLLECTION_NAME }
     });
 
     let output = '';
@@ -117,7 +124,6 @@ app.post('/chat', async (req, res) => {
         return res.status(500).json({ error: assistantReply });
       }
 
-      // Store in Redis
       const historyKey = `session:${sessionId}`;
       await redisClient.rPush(historyKey, JSON.stringify({ user: message, bot: assistantReply }));
       await redisClient.expire(historyKey, 3600);
