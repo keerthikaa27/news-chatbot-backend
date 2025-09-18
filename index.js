@@ -3,7 +3,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const redis = require('redis');
 const { spawn } = require('child_process');
-const axios = require('axios'); 
+const axios = require('axios');
 require('dotenv').config();
 
 const app = express();
@@ -13,21 +13,23 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // Redis client
-const redisClient = redis.createClient(); 
-redisClient.on('error', (err) => console.log('Redis Client Error', err));
+const redisClient = redis.createClient({
+  url: process.env.REDIS_URL 
+});
+redisClient.on('error', (err) => console.error('Redis Client Error', err));
 
 // Cache warming function
 const warmCache = async () => {
-  const queries = ["latest news on india", "india economy", "modi policies"];
-  const warmupSessionId = "warmup-" + Date.now(); 
+  const queries = ["latest news on india", "india economy"];
+  const warmupSessionId = "warmup-" + Date.now();
   console.log('Starting cache warming...');
   
   for (const query of queries) {
     try {
-      await axios.post('http://localhost:5000/chat', {
+      await axios.post('https://news-chatbot-backend-ko8e.onrender.com/chat', {
         message: query,
         sessionId: warmupSessionId
-      }, { timeout: 30000 }); 
+      }, { timeout: 30000 });
       console.log(`Cache warmed for query: "${query}"`);
     } catch (err) {
       console.error(`Cache warm failed for "${query}":`, err.message);
@@ -46,7 +48,7 @@ const warmCache = async () => {
 (async () => {
   try {
     await redisClient.connect();
-    console.log('Redis connected');
+    console.log('Connected to Redis');
     // Warm cache after Redis connects
     await warmCache();
   } catch (err) {
@@ -54,7 +56,7 @@ const warmCache = async () => {
   }
 })();
 
-
+// Routes
 app.post('/chat', async (req, res) => {
   const { sessionId, message } = req.body;
 
@@ -94,7 +96,7 @@ app.post('/chat', async (req, res) => {
       // Store in Redis
       const historyKey = `session:${sessionId}`;
       await redisClient.rPush(historyKey, JSON.stringify({ user: message, bot: assistantReply }));
-      await redisClient.expire(historyKey, 3600); 
+      await redisClient.expire(historyKey, 3600);
 
       res.json({ reply: assistantReply });
     });
