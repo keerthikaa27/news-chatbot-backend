@@ -1,20 +1,21 @@
 {
   "name": "rag-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend for News Chatbot",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "pip install -r requirements.txt",
+    "start": "python embed_store.py && node index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "axios": "^1.12.2",
-    "body-parser": "^2.2.0",
+    "axios": "^1.6.7",
+    "body-parser": "^1.19.0",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.2",
-    "express": "^5.1.0",
-    "redis": "^5.8.2"
+    "dotenv": "^16.0.0",
+    "express": "^4.17.1",
+    "redis": "^4.6.5"
   }
 }
