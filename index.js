@@ -1,5 +1,3 @@
-const fs = require('fs');
-const { spawn } = require('child_process');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -9,27 +7,6 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const CHROMA_DIR = process.env.CHROMA_DIR || './chroma_store';
-
-
-if (!fs.existsSync(CHROMA_DIR)) {
-  console.log(`${CHROMA_DIR} not found. Running embed_store.py...`);
-  const embed = spawn('python', ['embed_store.py'], {
-    cwd: __dirname,
-    env: { ...process.env, CHROMA_DIR, CSV_FILE: process.env.CSV_FILE, COLLECTION_NAME: process.env.COLLECTION_NAME, BATCH_SIZE: process.env.BATCH_SIZE, START_ROW: process.env.START_ROW }
-  });
-
-  embed.stdout.on('data', (data) => console.log(`Embed stdout: ${data}`));
-  embed.stderr.on('data', (data) => console.error(`Embed stderr: ${data}`));
-
-  embed.on('close', (code) => {
-    if (code === 0) {
-      console.log('Embed store built successfully.');
-    } else {
-      console.error(`Embed store failed with exit code ${code}`);
-    }
-  });
-}
 
 app.use(cors({
   origin: ['https://news-chatbot-frontend-e592.onrender.com', 'http://localhost:3000'],
@@ -42,7 +19,6 @@ const redisClient = redis.createClient({
   url: process.env.REDIS_URL
 });
 redisClient.on('error', (err) => console.error('Redis Client Error', err));
-
 const warmCache = async () => {
   const queries = ["latest news on india", "india economy"];
   const warmupSessionId = "warmup-" + Date.now();
@@ -64,7 +40,7 @@ const warmCache = async () => {
         if (attempts === 0) {
           console.error(`Failed to warm cache for "${query}" after 3 attempts`);
         }
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
   }
@@ -98,7 +74,7 @@ app.post('/chat', async (req, res) => {
   try {
     const python = spawn('python', ['chat_query.py', message.trim()], {
       cwd: __dirname,
-      env: { ...process.env, GEMINI_API_KEY: process.env.GEMINI_API_KEY, CHROMA_DIR, COLLECTION_NAME: process.env.COLLECTION_NAME }
+      env: { ...process.env, GEMINI_API_KEY: process.env.GEMINI_API_KEY, CHROMA_DIR: process.env.CHROMA_DIR, COLLECTION_NAME: process.env.COLLECTION_NAME }
     });
 
     let output = '';
