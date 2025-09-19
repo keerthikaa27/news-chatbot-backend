@@ -4,8 +4,8 @@
   "description": "Backend for News Chatbot",
   "main": "index.js",
   "scripts": {
-    "build": "pip install -r requirements.txt",
-    "start": "python embed_store.py && node index.js"
+    "build": "pip install -r requirements.txt && python embed_store.py",
+    "start": "node index.js"
   },
   "keywords": [],
   "author": "",
